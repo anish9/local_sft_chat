@@ -1,0 +1,4 @@
+streamlit>=1.31
+torch
+tiktoken
+huggingface_hub
