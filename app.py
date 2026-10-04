@@ -17,13 +17,14 @@ CHECKPOINT_PATH = hf_hub_download(
     filename="sft_inference_state.pt",
 )
 
-#print(torch.get_default_device()) 
+#print(torch.get_default_device())
 
 
 @st.cache_resource(show_spinner="Loading your SFT model…")
 def load_model(checkpoint_path):
+    SEQ_LEN = 2048
     # Import definitions only: training must be protected by its __main__ guard.
-    from train_sft_ddp import TinyGPT, tokenizer, SEQ_LEN
+    from train_sft_ddp import TinyGPT, tokenizer
 
     # if not torch.cuda.is_available():
     #     raise RuntimeError("Activate your CUDA-enabled training environment first.")
@@ -154,6 +155,34 @@ def answer_stream(model, tokenizer, prompt_ids, max_new_tokens,
         del cache, logits
 
 
+def prompt_examples():
+    """Show compact prompt buttons and return the clicked prompt."""
+    examples = {
+        "💬 General questions": "is adding turmeric in food health?",
+        "✍️ Write an essay": (
+            "Write a short essay about how agriculture supports the economy."
+        ),
+        "📖 Create a story": 'Write a movie plot on title -"The Last Mile"',
+        "💡 Marketing ideas": "How to setup marketing strategy for a beauty salon?",
+    }
+
+    st.caption("Try a prompt · Click a box to send")
+    selected = None
+    items = list(examples.items())
+    for start in range(0, len(items), 2):
+        columns = st.columns(2, gap="small")
+        for offset, (title, text) in enumerate(items[start:start + 2]):
+            with columns[offset]:
+                if st.button(
+                    title,
+                    key=f"example_{start + offset}",
+                    help=text,
+                    use_container_width=True,
+                ):
+                    selected = text
+    return selected
+
+
 def main():
     st.set_page_config(page_title="Anish AI slop", page_icon="💬", layout="centered")
     st.title("Blah Blah AI - cpu")
@@ -190,11 +219,16 @@ def main():
         st.info("Started a new chat with your updated system prompt.")
     st.session_state.active_system_prompt = system_prompt
 
+    example_prompt = prompt_examples()
+
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-    if prompt := st.chat_input("Message your model…"):
+    typed_prompt = st.chat_input("Message your model…")
+    prompt = typed_prompt or example_prompt
+
+    if prompt:
         user_message = {"role": "user", "content": prompt}
         messages = st.session_state.messages + [user_message]
         with st.chat_message("user"):
@@ -207,7 +241,7 @@ def main():
                     st.caption(f"Using recent context; omitted {omitted} oldest turn(s).")
                 if budget < max_new_tokens:
                     st.caption(f"Output budget reduced to {budget} tokens to fit this message.")
-                # One generation at a time keeps shared GPU memory use bounded.
+                # One generation at a time bounds shared CPU resource use.
                 with generation_lock:
                     stream = answer_stream(model, tokenizer, prompt_ids, budget,
                                            temperature, top_p, top_k)
