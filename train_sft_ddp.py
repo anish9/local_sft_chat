@@ -1,5 +1,3 @@
-"""Self-contained TinyGPT SFT: messages data, model, DDP training and warmup."""
-
 import os
 import random
 
